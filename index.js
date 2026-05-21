@@ -23,9 +23,11 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
+
     const db = client.db("findTutorDB");
     const tutorsCollection = db.collection("tutors");
+    const bookingsCollection = db.collection("bookings");
 
     app.get("/tutors", async (req, res) => {
       const tutors = await tutorsCollection.find().toArray();
@@ -38,11 +40,48 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/tutors/:id", async (req, res) => {
+    app.post("/bookings", async (req, res) => {
+      const booking = req.body;
+      const result = await bookingsCollection.insertOne(booking);
+      res.send(result);
+    });
+
+    app.get(
+      "/tutors/:id", async (req, res) => {
+        const { id } = req.params;
+        const tutor = await tutorsCollection.findOne({ _id: new ObjectId(id) });
+        if (!tutor) return res.status(404).send({ error: "Tutor not found" });
+        res.send(tutor);
+      },
+    );
+
+    app.get("/bookings", async (req, res) => {
+      const bookings = await bookingsCollection.find().toArray();
+      res.send(bookings);
+    });
+
+    app.put("/tutors/:id", async (req, res) => {
       const { id } = req.params;
-      const tutor = await tutorsCollection.findOne({ _id: new ObjectId(id) });
-      if (!tutor) return res.status(404).send({ error: "Tutor not found" });
-      res.send(tutor);
+      const updatedTutor = req.body;
+      const result = await tutorsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedTutor },
+      );
+      if (result.matchedCount === 0)
+        return res.status(404).send({ error: "Tutor not found" });
+      res.send(result);
+    });
+
+    app.patch("/bookings/:id", async (req, res) => {
+      const { id } = req.params;
+      const updatedFields = req.body;
+      const result = await bookingsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedFields },
+      );
+      if (result.matchedCount === 0)
+        return res.status(404).send({ error: "Booking not found" });
+      res.send(result);
     });
   } finally {
     // Ensures that the client will close when you finish/error
