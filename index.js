@@ -9,7 +9,8 @@ const uri = process.env.MONGODB_URI;
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
+app.options("*", cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -28,39 +29,48 @@ async function run() {
     const db = client.db("findTutorDB");
     const tutorsCollection = db.collection("tutors");
     const bookingsCollection = db.collection("bookings");
+    const apiRouter = express.Router();
 
-    app.get("/tutors", async (req, res) => {
+    apiRouter.get("/tutors", async (req, res) => {
       const tutors = await tutorsCollection.find().toArray();
-      res.send(tutors);
+      res.send({ data: tutors });
     });
 
-    app.post("/tutors", async (req, res) => {
+    apiRouter.post("/tutors", async (req, res) => {
       const tutor = req.body;
       const result = await tutorsCollection.insertOne(tutor);
-      res.send(result);
+      res.send({ message: "Tutor created", result });
     });
 
-    app.post("/bookings", async (req, res) => {
+    apiRouter.delete("/tutors/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await tutorsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      if (result.deletedCount === 0)
+        return res.status(404).send({ error: "Tutor not found" });
+      res.send({ message: "Tutor deleted" });
+    });
+
+    apiRouter.post("/bookings", async (req, res) => {
       const booking = req.body;
       const result = await bookingsCollection.insertOne(booking);
-      res.send(result);
+      res.send({ message: "Booking created", result });
     });
 
-    app.get(
-      "/tutors/:id", async (req, res) => {
-        const { id } = req.params;
-        const tutor = await tutorsCollection.findOne({ _id: new ObjectId(id) });
-        if (!tutor) return res.status(404).send({ error: "Tutor not found" });
-        res.send(tutor);
-      },
-    );
+    apiRouter.get("/tutors/:id", async (req, res) => {
+      const { id } = req.params;
+      const tutor = await tutorsCollection.findOne({ _id: new ObjectId(id) });
+      if (!tutor) return res.status(404).send({ error: "Tutor not found" });
+      res.send({ data: tutor });
+    });
 
-    app.get("/bookings", async (req, res) => {
+    apiRouter.get("/bookings", async (req, res) => {
       const bookings = await bookingsCollection.find().toArray();
-      res.send(bookings);
+      res.send({ data: bookings });
     });
 
-    app.put("/tutors/:id", async (req, res) => {
+    apiRouter.put("/tutors/:id", async (req, res) => {
       const { id } = req.params;
       const updatedTutor = req.body;
       const result = await tutorsCollection.updateOne(
@@ -69,10 +79,10 @@ async function run() {
       );
       if (result.matchedCount === 0)
         return res.status(404).send({ error: "Tutor not found" });
-      res.send(result);
+      res.send({ message: "Tutor updated", result });
     });
 
-    app.patch("/bookings/:id", async (req, res) => {
+    apiRouter.patch("/bookings/:id", async (req, res) => {
       const { id } = req.params;
       const updatedFields = req.body;
       const result = await bookingsCollection.updateOne(
@@ -81,8 +91,10 @@ async function run() {
       );
       if (result.matchedCount === 0)
         return res.status(404).send({ error: "Booking not found" });
-      res.send(result);
+      res.send({ message: "Booking updated", result });
     });
+
+    app.use("/api", apiRouter);
   } finally {
     // Ensures that the client will close when you finish/error
   }
@@ -90,10 +102,14 @@ async function run() {
 
 run().catch(console.dir);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
 app.get("/", (req, res) => {
   res.send("Hello, World!");
 });
+
+module.exports = app;
